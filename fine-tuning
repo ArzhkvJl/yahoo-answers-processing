@@ -1,0 +1,123 @@
+import mlflow
+import evaluate
+import bert_score
+import numpy as np
+import wandb
+from datasets import load_dataset, DatasetDict
+from transformers import (
+    T5ForConditionalGeneration,
+    T5Tokenizer,
+    DataCollatorForSeq2Seq,
+    Trainer,
+    TrainingArguments,
+)
+
+MODEL_NAME = "google/flan-t5-base"
+DATASET_NAME = "JuliaTsk/yahoo-answers"
+
+
+def preprocess_function(examples):
+    prefix = "Please answer this question: "
+    """Add prefix to the sentences, tokenize the text, and set the labels"""
+    # The "inputs" are the tokenized answer:
+    inputs = [prefix + qn for qn in examples["question title"]]
+    model_inputs = tokenizer(inputs, max_length=128, truncation=True, padding="max_length")
+
+    # The "labels" are the tokenized outputs:
+    labels = tokenizer(text_target=[str(ans) if ans is not None else "" for ans in examples["best answer"]],
+                       max_length=128, truncation=True, padding="max_length")
+    model_inputs["labels"] = labels["input_ids"]
+    return model_inputs
+
+
+def compute_bertscore(predictions, references):
+    P, R, F1 = bert_score.score(predictions, references, lang="en", verbose=True)
+    return {"bertscore_f1": F1.mean().item()}
+
+
+def evaluate1(logits, labels, tokenizer):
+    # Convert logits to predicted class labels
+
+    metric = evaluate.load("accuracy")
+    predictions = np.argmax(logits, axis=-1)
+
+    # Compute accuracy
+    accuracy = metric.compute(predictions=predictions, references=labels)
+
+    # Decode predictions and references to text
+    decoded_predictions = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+    decoded_references = tokenizer.batch_decode(labels, skip_special_tokens=True)
+
+    # Compute BERTScore
+    bert_score_result = compute_bertscore(decoded_predictions, decoded_references)
+    wandb.log({
+            "bert_score": bert_score_result,
+            "train_accuracy": accuracy,
+        })
+    # Combine all results
+    return {**accuracy, **bert_score_result}
+
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    # Call evaluate1 with logits and labels
+    metrics = evaluate1(logits, labels, tokenizer)
+    return metrics
+
+
+# Acquire the training data from Hugging Face
+data_files = {"train": "train.csv", "test": "test.csv"}
+yahoo_answers_qa = load_dataset(DATASET_NAME, data_files=data_files)
+train_subset = yahoo_answers_qa['train'].select(range(28000))
+test_subset = yahoo_answers_qa['test'].select(range(8000))
+yahoo_answers_qa = DatasetDict({
+    "train": train_subset,
+    "test": test_subset
+})
+
+# Load the tokenizer, model, and data collator
+tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
+model = T5ForConditionalGeneration.from_pretrained(MODEL_NAME)
+data_collator = DataCollatorForSeq2Seq(
+    tokenizer=tokenizer,
+    model=model
+)
+
+# Map the preprocessing function across our dataset
+tokenized_dataset = yahoo_answers_qa.map(preprocess_function, batched=True)
+
+training_args = TrainingArguments(
+    report_to='wandb',
+    eval_strategy='steps',
+    num_train_epochs=1,
+    output_dir="./output",
+    logging_steps=100,
+    eval_steps=50,
+    save_steps=100,
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=8,
+    group_by_length = True,
+    run_name = 'yahoo_training',
+    logging_dir="./logs",
+    gradient_accumulation_steps=4,
+    fp16=True,                  # Enable mixed precision training. Only for GPU
+    optim="paged_adamw_32bit",  # Optimizer for training
+    load_best_model_at_end = True,
+    metric_for_best_model = 'accuracy',
+    learning_rate = 5e-5,
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_dataset["train"],
+    eval_dataset=tokenized_dataset["test"],
+    compute_metrics=compute_metrics,
+    data_collator=data_collator,
+)
+
+mlflow.set_experiment("Fine-tuning")
+
+with mlflow.start_run() as run:
+    trainer.train()
+

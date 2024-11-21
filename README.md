@@ -5,5 +5,6 @@ The goal of this project is to prepare a new dataset based on the YahooAnswers d
 ## 1. Preparation 
 The first step is to test several FLAN-T5 model responses to basic user questions found in the YahooAnswers dataset.
 The script for this contains in main.py
+
 Example output:
 ![img.png](img.png)
