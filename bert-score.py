@@ -78,8 +78,8 @@ questions = [f"Q{i + 1}" for i in range(len(results['f1']))]
 
 # Plotting
 plt.figure(figsize=(10, 6))
-plt.plot(questions, results['f1'], marker='o', linestyle='-', color='b')
-plt.plot(questions, results['n1'], marker='o', linestyle='-', color='r')
+plt.plot(questions, results['f1_first'], marker='o', linestyle='-', color='b')
+plt.plot(questions, results['f1_second'], marker='o', linestyle='-', color='r')
 
 # Enhancing the plot
 plt.title("F1 Scores for Each Question", fontsize=14)
