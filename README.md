@@ -14,10 +14,10 @@ pip install -r requirements.txt
 
 ```bash
 # Start fine-tuning process and save a new model
-python fine-tuning
+python fine-tuning.py
 
 # Ask questions to trained model 
-python "fine-tuned model qa.py"
+python start_qa.py
 ```
 
 ## 1. Preparing training dataset
@@ -44,6 +44,13 @@ BERTScore evaluates the semantic similarity between the generated predictions an
 After choosing the best checkpoint and comparing its answers with the answers of flan-t5 this was pushed to HuggingFace Hub as "JuliaTsk/flan-t5-base-finetuned".
 
 Comparing answers:
+
+```python
+# Example question
+example = "why doesn't an optical mouse work on a glass table? "
+example1 = "Why does Zebras have stripes?"
+example2 = "What's the capital of French?"
+```
 
 <img width="600" alt="image" src="https://github.com/user-attachments/assets/0509e95c-36b8-410a-931e-064dbc61f7b0">
 

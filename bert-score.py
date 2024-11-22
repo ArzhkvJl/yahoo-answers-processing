@@ -16,11 +16,11 @@ def preprocess_function(examples):
     """Add prefix to the sentences, tokenize the text, and set the labels"""
     prefix = "Please answer this question: "
     # The "inputs" are the tokenized questions from dataset:
-    inputs = [prefix + qn for qn in examples["question title"]]
+    inputs = [prefix + question for question in examples["question title"]]
     model_inputs = tokenizer(inputs, max_length=128, truncation=True, padding="max_length")
 
     # The "labels" are the tokenized outputs:
-    labels = tokenizer(text_target=[str(ans) if ans is not None else "" for ans in examples["best answer"]],
+    labels = tokenizer(text_target=[str(best_answer) if best_answer is not None else "" for best_answer in examples["best answer"]],
                        max_length=128, truncation=True, padding="max_length")
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
@@ -36,6 +36,8 @@ yahoo_answers_qa = DatasetDict({
     "test": test_subset
 })
 
+
+# Load the tokenizer and model
 tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
 last_checkpoint = "output/checkpoint-1500"
 finetuned_model = T5ForConditionalGeneration.from_pretrained(last_checkpoint)
